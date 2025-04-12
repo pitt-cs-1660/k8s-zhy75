@@ -12,6 +12,9 @@ spec:
   ##
   # Create service selector labels here
   ##
+  selector:
+    app: wordpress
+    tier: mysql
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -21,6 +24,8 @@ data:
   ##
   # create non-sensative data attributes
   ##
+  database: 'wordpress'
+  user: 'wordpress'
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -33,10 +38,18 @@ spec:
   ##
   # Create app label selectors here
   ##
+  selector:
+    matchLabels:
+      app: wordpress
+      tier: mysql
   template:
     ##
     # Create metadata labels here
     ##
+    metadata:
+      labels:
+        app: wordpress
+        tier: mysql
     spec:
       containers:
       - image: mysql:8.0
@@ -46,11 +59,31 @@ spec:
         # mount non-sensitive environment vars from configmap
         # MYSQL_DATABASE | MYSQL_USER
         ##
+          - name: MYSQL_DATABASE
+            valueFrom:
+              configMapKeyRef:
+                name: wordpress-mysql
+                key: database
+          - name: MYSQL_USER
+            valueFrom:
+              configMapKeyRef:
+                name: wordpress-mysql
+                key: user
 
         ##
         # mount sensitive environment vars from secret
         # MYSQL_ROOT_PASSWORD | MYSQL_PASSWORD
         ##
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mysql-secret
+                key: root-password
+          - name: MYSQL_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mysql-secret
+                key: user-password
         ports:
         - containerPort: 3306
           name: mysql
@@ -58,7 +91,26 @@ spec:
       # define volume mounts here, be sure to reference
       # the PVC in your container spec
       ##
+        volumeMounts:
+        - name: mysql-pvc
+          mountPath: /var/lib/mysql
+      volumes:  
+      - name: mysql-pvc
+        persistentVolumeClaim:
+          claimName: mysql-pv-claim
+
 ---
 ##
 # Create persistent volume claim here
 ##
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pv-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard 
